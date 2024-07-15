@@ -26,13 +26,14 @@
 #include <dpu_probe.h>
 #endif
 
-// Pointer declaration
+// Pointer declaration - generic 
+// input, output을 저장할 generic type의 배열을 선언 (포인터 형태로)
 static T* A;
 static T* B;
 static T* C;
-static T* C2;
+static T* C2; // 왜 C2? -> 
 
-// Create input arrays
+// Create input arrays - random으로 생성한 데이터를 A, B에 대입하여 저장 
 static void read_input(T* A, T* B, unsigned int nr_elements) {
     srand(0);
     printf("nr_elements\t%u\t", nr_elements);
@@ -42,7 +43,7 @@ static void read_input(T* A, T* B, unsigned int nr_elements) {
     }
 }
 
-// Compute output in the host
+// Compute output in the host - 호스트에서 벡터 덧셈을 (요소별 덧셈) 수행하는 코드 
 static void vector_addition_host(T* C, T* A, T* B, unsigned int nr_elements) {
     for (unsigned int i = 0; i < nr_elements; i++) {
         C[i] = A[i] + B[i];
@@ -76,11 +77,12 @@ int main(int argc, char **argv) {
     const unsigned int input_size_dpu_8bytes = 
         ((input_size_dpu * sizeof(T)) % 8) != 0 ? roundup(input_size_dpu, 8) : input_size_dpu; // Input size per DPU (max.), 8-byte aligned
 
-    // Input/output allocation
+    // Input/output allocation - 배열 크기 계산하여, 각 어레이에 메모리를 할당하는 과정
     A = malloc(input_size_dpu_8bytes * nr_of_dpus * sizeof(T));
     B = malloc(input_size_dpu_8bytes * nr_of_dpus * sizeof(T));
     C = malloc(input_size_dpu_8bytes * nr_of_dpus * sizeof(T));
     C2 = malloc(input_size_dpu_8bytes * nr_of_dpus * sizeof(T));
+
     T *bufferA = A;
     T *bufferB = B;
     T *bufferC = C2;
@@ -97,6 +99,7 @@ int main(int argc, char **argv) {
     for(int rep = 0; rep < p.n_warmup + p.n_reps; rep++) {
 
         // Compute output on CPU (performance comparison and verification purposes)
+        // 타이머 + host에서 벡터 덧셈을 수행하는 과정 (결과 비교를 위한 목적으로)
         if(rep >= p.n_warmup)
             start(&timer, 0, rep - p.n_warmup);
         vector_addition_host(C, A, B, input_size);
@@ -106,9 +109,11 @@ int main(int argc, char **argv) {
         printf("Load input data\n");
         if(rep >= p.n_warmup)
             start(&timer, 1, rep - p.n_warmup);
+        
         // Input arguments
         unsigned int kernel = 0;
         dpu_arguments_t input_arguments[NR_DPUS];
+
         for(i=0; i<nr_of_dpus-1; i++) {
             input_arguments[i].size=input_size_dpu_8bytes * sizeof(T); 
             input_arguments[i].transfer_size=input_size_dpu_8bytes * sizeof(T); 
@@ -118,7 +123,7 @@ int main(int argc, char **argv) {
         input_arguments[nr_of_dpus-1].transfer_size=input_size_dpu_8bytes * sizeof(T); 
         input_arguments[nr_of_dpus-1].kernel=kernel;
 
-        // Copy input arrays
+        // Copy input arrays - DPU에 배열(데이터)를 전달하는 과정? 
         i = 0;
         DPU_FOREACH(dpu_set, dpu, i) {
             DPU_ASSERT(dpu_prepare_xfer(dpu, &input_arguments[i]));
@@ -137,7 +142,8 @@ int main(int argc, char **argv) {
         if(rep >= p.n_warmup)
             stop(&timer, 1);
 
-        printf("Run program on DPU(s) \n");
+        printf("Run program on DPU(s) \n"); 
+        // DPU로 벡터 덧셈 수행 (아까는 host - 즉, CPU)
         // Run DPU kernel
         if(rep >= p.n_warmup) {
             start(&timer, 2, rep - p.n_warmup);
@@ -169,7 +175,7 @@ int main(int argc, char **argv) {
         if(rep >= p.n_warmup)
             start(&timer, 3, rep - p.n_warmup);
         i = 0;
-        // PARALLEL RETRIEVE TRANSFER
+        // PARALLEL RETRIEVE TRANSFER - DPU에서 계산 결과를 전송한다 
         DPU_FOREACH(dpu_set, dpu, i) {
             DPU_ASSERT(dpu_prepare_xfer(dpu, bufferC + input_size_dpu_8bytes * i));
         }
@@ -179,7 +185,7 @@ int main(int argc, char **argv) {
 
     }
 
-    // Print timing results
+    // Print timing results - CPU vs DPU 시간 비교를 위한 코드
     printf("CPU ");
     print(&timer, 0, p.n_reps);
     printf("CPU-DPU ");
@@ -189,6 +195,7 @@ int main(int argc, char **argv) {
     printf("DPU-CPU ");
     print(&timer, 3, p.n_reps);
 
+// 중간중간 들어가는 에너지 코드는 뭐지?
 #if ENERGY
     double energy;
     DPU_ASSERT(dpu_probe_get(&probe, DPU_ENERGY, DPU_AVERAGE, &energy));
@@ -211,7 +218,7 @@ int main(int argc, char **argv) {
         printf("[" ANSI_COLOR_RED "ERROR" ANSI_COLOR_RESET "] Outputs differ!\n");
     }
 
-    // Deallocation
+    // Deallocation - 할당된 동적 메모리 해제
     free(A);
     free(B);
     free(C);
