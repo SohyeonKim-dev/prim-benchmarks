@@ -51,6 +51,8 @@ void start(Timer *timer, int i, int rep) {
 }
 
 void stop(Timer *timer, int i) {
+    // FreeBSD 책에서 본 함수! gettimeofday -> UST
+    // https://sohyeonkim-dev.tistory.com/327 
     gettimeofday(&timer->stopTime[i], NULL);
     timer->time[i] += (timer->stopTime[i].tv_sec - timer->startTime[i].tv_sec) * 1000000.0 +
                       (timer->stopTime[i].tv_usec - timer->startTime[i].tv_usec);
