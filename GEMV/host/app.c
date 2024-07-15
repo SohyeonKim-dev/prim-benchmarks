@@ -1,6 +1,7 @@
 /**
  * app.c
  * GEMV Host Application Source File
+ * General Matrix-Vector Multiplication - 행렬, 벡터 간 곱셈 연산 
  *
  */
 
@@ -17,6 +18,8 @@
 #if ENERGY
 #include <dpu_probe.h>
 #endif
+// ENERGY 매크로 -> the measurement of energy와 관련된 code 같다
+// issue: https://github.com/CMU-SAFARI/prim-benchmarks/issues/13
 
 #include "../support/common.h"
 #include "../support/timer.h"
@@ -27,27 +30,30 @@
 #define DPU_BINARY "./bin/gemv_dpu"
 #endif
 
-static T* A;
-static T* B;
-static T* C;
-static T* C_dpu;
+static T* A; // input matrix A
+static T* B; // input vector B
+static T* C; // output vector C 
+static T* C_dpu; // for dpu의 output 저장 
 
 // Create input arrays
 static void init_data(T* A, T* B, unsigned int m_size, unsigned int n_size) {
 	srand(0);
 
+	// 행렬 A 초기화 -> M * N
 	for (unsigned int i = 0; i < m_size * n_size; i++)
 	{
 		A[i] = (unsigned int) (rand()%50);
 	}
 
+	// 배열 B 초기화 -> N * 1 
 	for (unsigned int i = 0; i < n_size; i++)
 	{
 		B[i] = (unsigned int) (rand()%50);
 	}
 }
 
-// Compute output in the host
+// Compute output in the host - CPU에서 A * B 
+// 즉 (M * N) * (N * 1) 계산하는 func - gemv_host
 static void gemv_host(T* C, T* A, T* B, unsigned int m_size, unsigned int n_size) {
 	for (unsigned int i = 0; i < m_size; i++)
 	{
@@ -62,7 +68,8 @@ static void gemv_host(T* C, T* A, T* B, unsigned int m_size, unsigned int n_size
 	}
 }
 
-// Main of the Host Application
+// Main of the Host Application 
+// DPU를 호출하고, DPU 계산 결과 값을 가져오는 code도 host main func에 구현되어 있다. 
 int main(int argc, char **argv) {
 
 	struct Params p = input_params(argc, argv);
@@ -70,7 +77,9 @@ int main(int argc, char **argv) {
 	struct dpu_set_t dpu_set, dpu;
 	uint32_t nr_of_dpus;
 
-	// Allocate DPUs and load binary
+	// Allocate DPUs and load binary 
+	// DPU_ASSERT는 test과정에서 활용하는 assert 구문과 유사한 것
+	// 실제 func은 alloc, load, get_nr_dpus로 봐야한다. 
 	DPU_ASSERT(dpu_alloc(NR_DPUS, NULL, &dpu_set));
 	DPU_ASSERT(dpu_load(dpu_set, DPU_BINARY, NULL));
 	DPU_ASSERT(dpu_get_nr_dpus(dpu_set, &nr_of_dpus));
@@ -80,6 +89,7 @@ int main(int argc, char **argv) {
 	DPU_ASSERT(dpu_probe_init("energy_probe", &probe));
 #endif
 
+	// input params p로부터 m, n size 계산
 	unsigned int i;
 	unsigned int m_size = p.m_size;
 	unsigned int n_size = p.n_size;
